@@ -54,6 +54,8 @@ jobs:
           repository: Wei-Shaw/sub2api
           ref: v0.1.177
           path: sub2api
+      - name: Align Go toolchain with v0.1.177 requirements
+        run: sed -i 's/golang:1.26.5-alpine/golang:1.26.6-alpine/' sub2api/Dockerfile
       - name: Apply HTTP to WebSocket upstream patch
         run: git -C sub2api apply --check ../patches/http-ws.patch && git -C sub2api apply ../patches/http-ws.patch
       - uses: docker/setup-buildx-action@v3
