@@ -216,6 +216,18 @@ class RBACValidationTests(unittest.TestCase):
         self.assertEqual(response["data"]["id"], 13)
         self.assertEqual(response["data"]["name"], "BugTeam Monitor")
 
+    def test_bugteam_group_update_is_virtual_and_ownership_scoped(self):
+        body = validate_request(
+            CONFIG,
+            "PUT",
+            "/api/v1/admin/groups/13",
+            {"name": "BugTeam Monitor", "status": "active"},
+        )
+        response = virtual_group_response(CONFIG, body)
+        self.assertEqual(response["data"]["id"], 13)
+        with self.assertRaisesRegex(HTTPFailure, "group_not_allowed"):
+            validate_request(CONFIG, "PUT", "/api/v1/admin/groups/12", body)
+
     def test_account_query_rejects_duplicate_and_oversized_parameters(self):
         with self.assertRaisesRegex(ValueError, "duplicate"):
             validate_query("GET", "/api/v1/admin/accounts", "group=11&group=13&lite=true", CONFIG)
