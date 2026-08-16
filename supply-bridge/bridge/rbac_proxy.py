@@ -207,10 +207,6 @@ class RBACHandler(BaseHTTPRequestHandler):
                 self._audit(200, path, source="virtual_ownership_group_update")
                 self._safe_json(200, virtual_group_response(self.server.config, clean_body))
                 return
-            if self.command == "GET" and GROUP_PATH.fullmatch(path):
-                self._audit(200, path, source="virtual_ownership_group_read")
-                self._safe_json(200, virtual_group_response(self.server.config, {}))
-                return
             if path == "/api/v1/admin/accounts/usage/batch" and isinstance(clean_body, dict):
                 for account_id in clean_body.get("account_ids", []):
                     self._require_owned_account(account_id)
