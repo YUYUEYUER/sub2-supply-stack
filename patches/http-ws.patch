@@ -1,0 +1,120 @@
+diff --git a/backend/internal/config/config.go b/backend/internal/config/config.go
+index 0ed2b17..fa09cf7 100644
+--- a/backend/internal/config/config.go
++++ b/backend/internal/config/config.go
+@@ -1140,6 +1140,9 @@ const DefaultOpenAIWSClientFirstMessageTimeoutSeconds = 30
+ type GatewayOpenAIWSConfig struct {
+ 	// ModeRouterV2Enabled: 新版 WS mode 路由开关（默认 false；关闭时保持 legacy 行为）
+ 	ModeRouterV2Enabled bool `mapstructure:"mode_router_v2_enabled"`
++	// HTTPIngressToWSUpstreamEnabled allows HTTP/SSE clients to use a WS upstream.
++	// It is opt-in because upstream WS events must be bridged back to HTTP/SSE.
++	HTTPIngressToWSUpstreamEnabled bool `mapstructure:"http_ingress_to_ws_upstream_enabled"`
+ 	// IngressModeDefault: ingress 默认模式（off/ctx_pool/passthrough/http_bridge）
+ 	IngressModeDefault string `mapstructure:"ingress_mode_default"`
+ 	// ClientFirstMessageTimeoutSeconds bounds the total time to read and decompress
+@@ -2278,6 +2281,7 @@ func setDefaults() {
+ 	// OpenAI Responses WebSocket（默认开启；可通过 force_http 紧急回滚）
+ 	viper.SetDefault("gateway.openai_ws.enabled", true)
+ 	viper.SetDefault("gateway.openai_ws.mode_router_v2_enabled", false)
++	viper.SetDefault("gateway.openai_ws.http_ingress_to_ws_upstream_enabled", false)
+ 	viper.SetDefault("gateway.openai_ws.ingress_mode_default", "ctx_pool")
+ 	viper.SetDefault("gateway.openai_ws.client_first_message_timeout_seconds", DefaultOpenAIWSClientFirstMessageTimeoutSeconds)
+ 	viper.SetDefault("gateway.openai_ws.ingress_inter_turn_idle_timeout_seconds", 300)
+diff --git a/backend/internal/config/config_test.go b/backend/internal/config/config_test.go
+index 718913a..d8e967f 100644
+--- a/backend/internal/config/config_test.go
++++ b/backend/internal/config/config_test.go
+@@ -494,6 +494,9 @@ func TestLoadDefaultOpenAIWSConfig(t *testing.T) {
+ 	if cfg.Gateway.OpenAIWS.ModeRouterV2Enabled {
+ 		t.Fatalf("Gateway.OpenAIWS.ModeRouterV2Enabled = true, want false")
+ 	}
++	if cfg.Gateway.OpenAIWS.HTTPIngressToWSUpstreamEnabled {
++		t.Fatalf("Gateway.OpenAIWS.HTTPIngressToWSUpstreamEnabled = true, want false")
++	}
+ 	if cfg.Gateway.OpenAIWS.IngressModeDefault != "ctx_pool" {
+ 		t.Fatalf("Gateway.OpenAIWS.IngressModeDefault = %q, want %q", cfg.Gateway.OpenAIWS.IngressModeDefault, "ctx_pool")
+ 	}
+@@ -521,6 +524,15 @@ func TestLoadOpenAIWSClientFirstMessageTimeoutFromEnv(t *testing.T) {
+ 	require.Equal(t, 120, cfg.Gateway.OpenAIWS.ClientFirstMessageTimeoutSeconds)
+ }
+ 
++func TestLoadOpenAIWSHTTPIngressToWSUpstreamFromEnv(t *testing.T) {
++	resetViperWithJWTSecret(t)
++	t.Setenv("GATEWAY_OPENAI_WS_HTTP_INGRESS_TO_WS_UPSTREAM_ENABLED", "true")
++
++	cfg, err := Load()
++	require.NoError(t, err)
++	require.True(t, cfg.Gateway.OpenAIWS.HTTPIngressToWSUpstreamEnabled)
++}
++
+ func TestLoadDefaultOpenAICompactModel(t *testing.T) {
+ 	resetViperWithJWTSecret(t)
+ 
+diff --git a/backend/internal/service/openai_client_transport.go b/backend/internal/service/openai_client_transport.go
+index c9cf324..7d08119 100644
+--- a/backend/internal/service/openai_client_transport.go
++++ b/backend/internal/service/openai_client_transport.go
+@@ -63,8 +63,9 @@ func normalizeOpenAIClientTransport(transport OpenAIClientTransport) OpenAIClien
+ func resolveOpenAIWSDecisionByClientTransport(
+ 	decision OpenAIWSProtocolDecision,
+ 	clientTransport OpenAIClientTransport,
++	httpIngressToWSUpstreamEnabled bool,
+ ) OpenAIWSProtocolDecision {
+-	if clientTransport == OpenAIClientTransportHTTP {
++	if clientTransport == OpenAIClientTransportHTTP && !httpIngressToWSUpstreamEnabled {
+ 		return openAIWSHTTPDecision("client_protocol_http")
+ 	}
+ 	return decision
+diff --git a/backend/internal/service/openai_client_transport_test.go b/backend/internal/service/openai_client_transport_test.go
+index ef90e61..455a205 100644
+--- a/backend/internal/service/openai_client_transport_test.go
++++ b/backend/internal/service/openai_client_transport_test.go
+@@ -95,13 +95,16 @@ func TestResolveOpenAIWSDecisionByClientTransport(t *testing.T) {
+ 		Reason:    "ws_v2_enabled",
+ 	}
+ 
+-	httpDecision := resolveOpenAIWSDecisionByClientTransport(base, OpenAIClientTransportHTTP)
++	httpDecision := resolveOpenAIWSDecisionByClientTransport(base, OpenAIClientTransportHTTP, false)
+ 	require.Equal(t, OpenAIUpstreamTransportHTTPSSE, httpDecision.Transport)
+ 	require.Equal(t, "client_protocol_http", httpDecision.Reason)
+ 
+-	wsDecision := resolveOpenAIWSDecisionByClientTransport(base, OpenAIClientTransportWS)
++	httpWSDecision := resolveOpenAIWSDecisionByClientTransport(base, OpenAIClientTransportHTTP, true)
++	require.Equal(t, base, httpWSDecision)
++
++	wsDecision := resolveOpenAIWSDecisionByClientTransport(base, OpenAIClientTransportWS, false)
+ 	require.Equal(t, base, wsDecision)
+ 
+-	unknownDecision := resolveOpenAIWSDecisionByClientTransport(base, OpenAIClientTransportUnknown)
++	unknownDecision := resolveOpenAIWSDecisionByClientTransport(base, OpenAIClientTransportUnknown, false)
+ 	require.Equal(t, base, unknownDecision)
+ }
+diff --git a/backend/internal/service/openai_gateway_forward.go b/backend/internal/service/openai_gateway_forward.go
+index 34c92df..5c3d618 100644
+--- a/backend/internal/service/openai_gateway_forward.go
++++ b/backend/internal/service/openai_gateway_forward.go
+@@ -71,8 +71,8 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
+ 		}
+ 	}
+ 	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
+-	// 仅允许 WS 入站请求走 WS 上游，避免出现 HTTP -> WS 协议混用。
+-	wsDecision = resolveOpenAIWSDecisionByClientTransport(wsDecision, GetOpenAIClientTransport(c))
++	allowHTTPToWS := s.cfg != nil && s.cfg.Gateway.OpenAIWS.HTTPIngressToWSUpstreamEnabled
++	wsDecision = resolveOpenAIWSDecisionByClientTransport(wsDecision, GetOpenAIClientTransport(c), allowHTTPToWS)
+ 	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
+ 	compactPath := isOpenAIResponsesCompactPath(c)
+ 	if shouldFlattenOpenAIResponsesNamespaces(account, wsDecision.Transport, passthroughEnabled, compactPath) {
+diff --git a/deploy/config.example.yaml b/deploy/config.example.yaml
+index 095c550..c418064 100644
+--- a/deploy/config.example.yaml
++++ b/deploy/config.example.yaml
+@@ -329,6 +329,9 @@ gateway:
+     # 新版 WS mode 路由（默认关闭）。关闭时忽略账号级 WS mode（包括 http_bridge），保持 legacy ctx_pool 行为。
+     # 环境变量：GATEWAY_OPENAI_WS_MODE_ROUTER_V2_ENABLED=true
+     mode_router_v2_enabled: false
++    # Allow HTTP/SSE ingress to use the account's WS upstream and bridge events back downstream.
++    # Environment: GATEWAY_OPENAI_WS_HTTP_INGRESS_TO_WS_UPSTREAM_ENABLED=true
++    http_ingress_to_ws_upstream_enabled: false
+     # ingress 默认模式：off|ctx_pool|passthrough|http_bridge（仅 mode_router_v2_enabled=true 生效；关闭时账号级 WS mode 被忽略）
+     # 兼容旧值：shared/dedicated 会按 ctx_pool 处理。
+     ingress_mode_default: ctx_pool

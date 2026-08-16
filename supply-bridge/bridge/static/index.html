@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Supply Bridge</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="loginView" class="login-shell">
+    <form id="loginForm" class="login-panel">
+      <div class="brand-mark">SB</div>
+      <h1>Supply Bridge</h1>
+      <label for="accessToken">管理口令</label>
+      <input id="accessToken" name="token" type="password" autocomplete="current-password" required autofocus>
+      <button class="button primary wide" type="submit">进入控制台</button>
+      <p id="loginError" class="form-error" role="alert"></p>
+    </form>
+  </div>
+
+  <div id="appView" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand-row"><div class="brand-mark small">SB</div><strong>Supply Bridge</strong></div>
+      <nav aria-label="主导航">
+        <button class="nav-item active" data-tab="overview">总览</button>
+        <button class="nav-item" data-tab="automation">自动补货</button>
+        <button class="nav-item" data-tab="orders">订单</button>
+        <button class="nav-item" data-tab="deliveries">账号推送</button>
+        <button class="nav-item" data-tab="recoveries">修复与退款</button>
+        <button class="nav-item" data-tab="notifications">飞书通知</button>
+        <button class="nav-item" data-tab="audit">操作审计</button>
+        <button class="nav-item" data-tab="access">连接状态</button>
+      </nav>
+      <div class="sidebar-foot">
+        <span id="engineDot" class="status-dot"></span>
+        <span id="engineLabel">正在连接</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">运行总览</h1>
+          <p id="lastUpdated">等待首次同步</p>
+        </div>
+        <div class="top-actions">
+          <button id="refreshButton" class="button secondary" type="button">刷新</button>
+          <button id="pollButton" class="button primary" type="button">立即检测</button>
+        </div>
+      </header>
+
+      <section id="tab-overview" class="tab-page active">
+        <div id="stopBanner" class="alert danger hidden"><strong>紧急停止已开启</strong><button id="resumeBannerButton" class="button danger-outline" type="button">恢复运行</button></div>
+        <div class="metric-grid">
+          <article class="metric"><span>可用账号</span><strong id="metricAvailable">--</strong><small id="metricAccountsDetail">总数 --</small></article>
+          <article class="metric"><span>剩余额度</span><strong id="metricQuota">--</strong><small id="metricRate">消耗 --</small></article>
+          <article class="metric"><span>并发占用</span><strong id="metricConcurrency">--</strong><small id="metricQueue">排队 --</small></article>
+          <article class="metric"><span>预计断供</span><strong id="metricEta">--</strong><small id="metricEtaDetail">预测窗口</small></article>
+          <article class="metric"><span>供应商余额</span><strong id="metricBalance">--</strong><small id="metricHeld">冻结 --</small></article>
+          <article class="metric"><span>今日支出</span><strong id="metricSpend">--</strong><small id="metricSpendCap">上限 --</small></article>
+        </div>
+
+        <div class="split-layout">
+          <section class="panel">
+            <div class="panel-head"><h2>运行状态</h2><span id="automationBadge" class="badge">--</span></div>
+            <dl class="status-list">
+              <div><dt>Sub2 连接</dt><dd id="sub2State">--</dd></div>
+              <div><dt>外部自动推送</dt><dd id="externalSupplierState">--</dd></div>
+              <div><dt>本地采购器</dt><dd id="supplierState">--</dd></div>
+              <div><dt>轮询时间</dt><dd id="pollState">--</dd></div>
+              <div><dt>当前订单</dt><dd id="activeOrderState">--</dd></div>
+            </dl>
+          </section>
+          <section class="panel danger-panel">
+            <div class="panel-head"><h2>运行控制</h2></div>
+            <div class="control-row">
+              <div><strong>紧急停止</strong><span>停止自动下单，保留状态查询和审计。</span></div>
+              <button id="emergencyButton" class="button danger" type="button">立即停止</button>
+            </div>
+            <div class="control-row">
+              <div><strong>手动补货</strong><span>遵守单次及每日消费上限。</span></div>
+              <button id="openManualOrder" class="button secondary" type="button">创建订单</button>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel table-panel">
+          <div class="panel-head"><h2>最近事件</h2><button class="link-button" data-tab-jump="audit" type="button">查看全部</button></div>
+          <div class="table-wrap"><table><thead><tr><th>时间</th><th>级别</th><th>事件</th><th>内容</th></tr></thead><tbody id="recentEventsBody"></tbody></table></div>
+        </section>
+      </section>
+
+      <section id="tab-automation" class="tab-page">
+        <form id="settingsForm">
+          <div class="section-head"><div><h2>自动补货规则</h2><p>所有金额均以人民币计算。</p></div><button class="button primary" type="submit">保存配置</button></div>
+          <section class="settings-band">
+            <h3>运行模式</h3>
+            <div class="form-grid three">
+              <label class="toggle-field"><input id="autoEnabled" type="checkbox"><span>自动补货</span></label>
+              <label class="toggle-field"><input id="dryRun" type="checkbox"><span>演练模式</span></label>
+              <label class="toggle-field"><input id="openaiPassthrough" type="checkbox"><span>OpenAI 透传</span></label>
+            </div>
+          </section>
+          <section class="settings-band">
+            <h3>补货触发</h3>
+            <div class="trigger-grid">
+              <label class="trigger"><input id="triggerLow" type="checkbox"><span><strong>最低库存</strong><small>可用账号低于阈值</small></span></label>
+              <label class="trigger"><input id="triggerEta" type="checkbox"><span><strong>预计断供</strong><small>ETA 进入预警窗口</small></span></label>
+              <label class="trigger"><input id="triggerConcurrency" type="checkbox"><span><strong>并发比例</strong><small>并发占用超过阈值</small></span></label>
+              <label class="trigger"><input id="triggerEmpty" type="checkbox"><span><strong>空池</strong><small>可用账号降为零</small></span></label>
+              <label class="trigger"><input id="triggerSchedule" type="checkbox"><span><strong>定时任务</strong><small>按固定周期检查</small></span></label>
+            </div>
+          </section>
+          <section class="settings-band">
+            <h3>库存与限额</h3>
+            <div class="form-grid four">
+              <label>最低库存<input id="lowWatermark" type="number" min="0" max="10000"></label>
+              <label>目标库存<input id="targetAvailable" type="number" min="1" max="10000"></label>
+              <label>单次最少<input id="minOrderUnits" type="number" min="1" max="100"></label>
+              <label>单次最多<input id="maxOrderUnits" type="number" min="1" max="100"></label>
+              <label>每日消费上限（元）<input id="dailySpendCap" type="number" min="0" step="0.01"></label>
+              <label>冷却时间（秒）<input id="cooldownSeconds" type="number" min="10"></label>
+              <label>ETA 预警（分钟）<input id="forecastLead" type="number" min="1"></label>
+              <label>并发阈值（%）<input id="concurrencyThreshold" type="number" min="1" max="100"></label>
+              <label>定时周期（分钟）<input id="scheduleInterval" type="number" min="5"></label>
+              <label>定时补货数量<input id="scheduleQuantity" type="number" min="1"></label>
+              <label>轮询周期（秒）<input id="pollInterval" type="number" min="5"></label>
+              <label>账号并发<input id="accountConcurrency" type="number" min="1" max="1000"></label>
+            </div>
+          </section>
+          <section class="settings-band">
+            <h3>商品优先级</h3>
+            <div class="choice-row">
+              <label><input id="product1h" type="checkbox" value="team_1h"><span>Team 1H</span></label>
+              <label><input id="product30" type="checkbox" value="oauth_30d"><span>Team 30D</span></label>
+              <label><input id="product7" type="checkbox" value="oauth_7d"><span>Team 7D</span></label>
+            </div>
+          </section>
+          <section class="settings-band">
+            <h3>Sub2 分组</h3>
+            <div class="form-grid three">
+              <label>隔离验货分组<select id="stagingGroup"></select></label>
+              <label>库存监测分组<select id="monitorGroup"></select></label>
+              <label>正式业务分组<select id="targetGroups" multiple size="4"></select></label>
+            </div>
+          </section>
+          <section class="settings-band">
+            <h3>模型白名单</h3>
+            <label class="full-field">模型（每行一个）<textarea id="models" rows="7" spellcheck="false"></textarea></label>
+          </section>
+        </form>
+      </section>
+
+      <section id="tab-orders" class="tab-page">
+        <div class="section-head"><div><h2>订单记录</h2><p>同一补货动作只会生成一个订单标识。</p></div><button class="button secondary" data-open-manual type="button">手动补货</button></div>
+        <div class="table-wrap"><table><thead><tr><th>创建时间</th><th>商品</th><th>数量</th><th>触发原因</th><th>状态</th><th>预估</th><th>实扣</th><th>错误</th><th>操作</th></tr></thead><tbody id="ordersBody"></tbody></table></div>
+      </section>
+
+      <section id="tab-deliveries" class="tab-page">
+        <div class="section-head"><div><h2>账号推送</h2><p>账号先进入隔离分组，测试通过后进入业务分组。</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>时间</th><th>账号</th><th>Sub2 ID</th><th>额度</th><th>有效期</th><th>状态</th><th>尝试</th><th>错误</th><th>操作</th></tr></thead><tbody id="deliveriesBody"></tbody></table></div>
+      </section>
+
+      <section id="tab-recoveries" class="tab-page">
+        <div class="section-head"><div><h2>修复与退款</h2><p>401 修复、替换、失败次数和供应商退款状态。</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>更新时间</th><th>账号</th><th>状态</th><th>尝试</th><th>错误</th></tr></thead><tbody id="recoveriesBody"></tbody></table></div>
+      </section>
+
+      <section id="tab-notifications" class="tab-page">
+        <form id="notificationForm">
+          <div class="section-head">
+            <div><h2>飞书通知</h2><p>自动运维异常、恢复、订单、退款和账号修复。</p></div>
+            <button class="button primary" type="submit">保存配置</button>
+          </div>
+          <div class="notification-state">
+            <span class="status-dot" id="feishuStateDot"></span>
+            <div><strong id="feishuStateTitle">待配置</strong><p id="feishuStateText">Webhook 未配置</p></div>
+          </div>
+          <section class="settings-band">
+            <h3>连接与签名</h3>
+            <div class="form-grid three">
+              <label class="toggle-field"><input id="feishuEnabled" type="checkbox"><span>开启飞书通知</span></label>
+              <label>Webhook<input id="feishuWebhook" type="password" autocomplete="off" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."></label>
+              <label>签名密钥<input id="feishuSecret" type="password" autocomplete="off" placeholder="可选"></label>
+            </div>
+          </section>
+          <section class="settings-band">
+            <h3>告警规则</h3>
+            <div class="form-grid three">
+              <label>余额预警线（元）<input id="feishuBalanceThreshold" type="number" min="0" step="0.01"></label>
+              <label>重复提醒间隔（分钟）<input id="feishuCooldownMinutes" type="number" min="1" max="1440"></label>
+            </div>
+            <div class="choice-row notification-choices">
+              <label><input id="feishuNotifyPool" type="checkbox"><span>断供与连接</span></label>
+              <label><input id="feishuNotifyBalance" type="checkbox"><span>余额不足</span></label>
+              <label><input id="feishuNotifyOrders" type="checkbox"><span>订单与导入</span></label>
+              <label><input id="feishuNotifyRecoveries" type="checkbox"><span>401、修复与退款</span></label>
+            </div>
+          </section>
+          <div class="notification-actions">
+            <button id="testFeishu" class="button secondary" type="button">发送测试通知</button>
+            <button id="clearFeishu" class="button danger-outline" type="button">清除凭据</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="tab-audit" class="tab-page">
+        <div class="section-head"><div><h2>操作审计</h2><p>敏感字段在写入前已脱敏。</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>时间</th><th>级别</th><th>事件类型</th><th>内容</th><th>详情</th></tr></thead><tbody id="eventsBody"></tbody></table></div>
+      </section>
+
+      <section id="tab-access" class="tab-page">
+        <div class="section-head"><div><h2>连接状态</h2><p>只显示配置结果，不显示密钥内容。</p></div></div>
+        <div class="connection-grid">
+          <article class="connection"><span class="status-dot" id="accessSub2Dot"></span><div><strong>Sub2 最小权限代理</strong><p id="accessSub2Text">--</p></div></article>
+          <article class="connection"><span class="status-dot" id="accessExternalSupplierDot"></span><div><strong>供应商自动推送</strong><p id="accessExternalSupplierText">--</p></div></article>
+          <article class="connection"><span class="status-dot" id="accessSupplierDot"></span><div><strong>本地备用采购器</strong><p id="accessSupplierText">--</p></div></article>
+          <article class="connection"><span class="status-dot online"></span><div><strong>管理访问</strong><p>管理口令已启用</p></div></article>
+          <article class="connection"><span class="status-dot online"></span><div><strong>审计数据库</strong><p>本地持久化已启用</p></div></article>
+        </div>
+        <button id="logoutButton" class="button secondary" type="button">退出控制台</button>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="manualOrderDialog">
+    <form id="manualOrderForm" method="dialog">
+      <div class="dialog-head"><h2>手动补货</h2><button id="closeManualOrder" class="icon-button" type="button" aria-label="关闭">×</button></div>
+      <label>商品<select id="manualProduct"><option value="team_1h">Team 1H</option><option value="oauth_30d">Team 30D</option><option value="oauth_7d">Team 7D</option></select></label>
+      <label>数量<input id="manualQuantity" type="number" min="1" value="1" required></label>
+      <label class="toggle-field warning"><input id="manualLive" type="checkbox"><span>真实下单</span></label>
+      <div class="dialog-actions"><button id="cancelManualOrder" class="button secondary" type="button">取消</button><button class="button primary" type="submit">提交订单</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
