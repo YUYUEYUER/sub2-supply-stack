@@ -114,7 +114,7 @@ class BridgeEngine:
             last_tick_at = self._last_tick_at
             last_error = self._last_tick_error
         return {
-                "version": "1.0.23",
+            "version": "1.0.24",
             "metrics": metrics,
             "settings": settings,
             "last_tick_at": last_tick_at,

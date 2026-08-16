@@ -47,7 +47,7 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/health":
-            self._json(200, {"status": "ok", "version": "1.0.23"})
+            self._json(200, {"status": "ok", "version": "1.0.24"})
             return
         if self.path.split("?", 1)[0] in ASSETS:
             self._static(self.path.split("?", 1)[0])

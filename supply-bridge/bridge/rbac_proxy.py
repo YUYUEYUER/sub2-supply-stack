@@ -93,13 +93,22 @@ CODEX_IMPORT_FIELDS = {
     "update_existing",
     "skip_default_group_bind",
     "confirm_mixed_channel_risk",
+    "schedulable",
 }
 QUERY_FIELDS = {
     "/api/v1/admin/groups": {"page", "page_size", "platform", "status", "search"},
     "/api/v1/admin/groups/all": {"platform", "status"},
     "/api/v1/admin/ops/concurrency": {"platform", "group_id"},
     "/api/v1/admin/ops/account-availability": {"platform", "group_id"},
-    OPS_OVERVIEW_PATH: {"range", "start", "end", "platform", "group_id", "mode"},
+    OPS_OVERVIEW_PATH: {
+        "range",
+        "time_range",
+        "start",
+        "end",
+        "platform",
+        "group_id",
+        "mode",
+    },
     "/api/v1/admin/accounts": {
         "page",
         "page_size",
@@ -688,6 +697,7 @@ def _validate_codex_import(config: ProxyConfig, body: Any) -> dict[str, Any]:
         "update_existing",
         "skip_default_group_bind",
         "confirm_mixed_channel_risk",
+        "schedulable",
     ):
         if key in result and not isinstance(result[key], bool):
             raise ValueError(f"codex import {key} must be boolean")

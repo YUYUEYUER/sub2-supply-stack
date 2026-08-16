@@ -127,6 +127,20 @@ class RBACValidationTests(unittest.TestCase):
         self.assertEqual(result["extra"]["openai_oauth_responses_websockets_v2_mode"], "ctx_pool")
         self.assertEqual(result["extra"]["codex_fingerprint_mode"], "session")
 
+    def test_codex_import_accepts_bugteam_schedulable_flag(self):
+        payload = codex_import_payload()
+        payload["schedulable"] = True
+        result = validate_request(
+            CONFIG,
+            "POST",
+            "/api/v1/admin/accounts/import/codex-session",
+            payload,
+        )
+        self.assertTrue(result["schedulable"])
+        payload["schedulable"] = "true"
+        with self.assertRaisesRegex(ValueError, "schedulable"):
+            validate_request(CONFIG, "POST", "/api/v1/admin/accounts/import/codex-session", payload)
+
     def test_codex_import_injects_trusted_groups_when_supplier_omits_them(self):
         payload = codex_import_payload()
         payload.pop("group_ids")
@@ -255,10 +269,10 @@ class RBACValidationTests(unittest.TestCase):
         query = validate_query(
             "GET",
             "/api/v1/admin/ops/dashboard/overview",
-            "range=1h&platform=openai&group_id=13",
+            "time_range=1h&platform=openai&group_id=13",
             CONFIG,
         )
-        self.assertIn("range=1h", query)
+        self.assertIn("time_range=1h", query)
         with self.assertRaisesRegex(ValueError, "ownership group"):
             validate_query(
                 "GET",
