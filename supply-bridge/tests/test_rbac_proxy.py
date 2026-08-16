@@ -249,6 +249,24 @@ class RBACValidationTests(unittest.TestCase):
                 "GET", "/api/v1/admin/ops/account-availability", "platform=openai&group_id=11", CONFIG
             )
 
+    def test_dashboard_overview_is_forced_to_ownership_group(self):
+        query = validate_query("GET", "/api/v1/admin/ops/dashboard/overview", "", CONFIG)
+        self.assertEqual(query, "platform=openai&group_id=13")
+        query = validate_query(
+            "GET",
+            "/api/v1/admin/ops/dashboard/overview",
+            "range=1h&platform=openai&group_id=13",
+            CONFIG,
+        )
+        self.assertIn("range=1h", query)
+        with self.assertRaisesRegex(ValueError, "ownership group"):
+            validate_query(
+                "GET",
+                "/api/v1/admin/ops/dashboard/overview",
+                "platform=openai&group_id=12",
+                CONFIG,
+            )
+
     def test_account_create_requires_ownership_group(self):
         payload = account_payload()
         payload["group_ids"] = [11]

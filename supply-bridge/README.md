@@ -24,7 +24,7 @@ pool outages and recovery, supplier connectivity, low balance, order/import fail
 ```sh
 python -m unittest discover -s tests -v
 python -m compileall -q bridge
-docker build -t ghcr.io/yuyueyuer/sub2-supply-bridge:1.0.22 .
+docker build -t ghcr.io/yuyueyuer/sub2-supply-bridge:1.0.23 .
 ```
 
 ## Required secret files

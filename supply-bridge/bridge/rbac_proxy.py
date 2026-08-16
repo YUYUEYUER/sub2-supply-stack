@@ -20,6 +20,7 @@ TEST_PATH = re.compile(r"^/api/v1/admin/accounts/(\d+)/test$")
 SCHEDULABLE_PATH = re.compile(r"^/api/v1/admin/accounts/(\d+)/schedulable$")
 USAGE_PATH = re.compile(r"^/api/v1/admin/accounts/(\d+)/usage$")
 CODEX_IMPORT_PATH = "/api/v1/admin/accounts/import/codex-session"
+OPS_OVERVIEW_PATH = "/api/v1/admin/ops/dashboard/overview"
 STATIC_ROUTES = {
     ("GET", "/api/v1/admin/groups"),
     ("POST", "/api/v1/admin/groups"),
@@ -27,6 +28,7 @@ STATIC_ROUTES = {
     ("GET", "/api/v1/admin/groups/capacity-summary"),
     ("GET", "/api/v1/admin/ops/concurrency"),
     ("GET", "/api/v1/admin/ops/account-availability"),
+    ("GET", OPS_OVERVIEW_PATH),
     ("GET", "/api/v1/admin/accounts"),
     ("POST", "/api/v1/admin/accounts"),
     ("POST", CODEX_IMPORT_PATH),
@@ -97,6 +99,7 @@ QUERY_FIELDS = {
     "/api/v1/admin/groups/all": {"platform", "status"},
     "/api/v1/admin/ops/concurrency": {"platform", "group_id"},
     "/api/v1/admin/ops/account-availability": {"platform", "group_id"},
+    OPS_OVERVIEW_PATH: {"range", "start", "end", "platform", "group_id", "mode"},
     "/api/v1/admin/accounts": {
         "page",
         "page_size",
@@ -392,6 +395,10 @@ def validate_query(
             )
         if config and path in {"/api/v1/admin/ops/concurrency", "/api/v1/admin/ops/account-availability"}:
             raise ValueError("operational queries must target the ownership group")
+        if config and path == OPS_OVERVIEW_PATH:
+            return urllib.parse.urlencode(
+                {"platform": "openai", "group_id": config.ownership_group_id}
+            )
         return ""
     if method == "GET" and USAGE_PATH.fullmatch(path):
         allowed = USAGE_QUERY_FIELDS
@@ -442,6 +449,13 @@ def validate_query(
             raise ValueError("operational queries must target the ownership group")
         if params.get("platform", "openai") != "openai":
             raise ValueError("operational query platform is not allowed")
+    if config and path == OPS_OVERVIEW_PATH:
+        if "group_id" in params and params["group_id"] != str(config.ownership_group_id):
+            raise ValueError("dashboard overview must target the ownership group")
+        if params.get("platform", "openai") != "openai":
+            raise ValueError("dashboard overview platform is not allowed")
+        params["platform"] = "openai"
+        params["group_id"] = str(config.ownership_group_id)
     return urllib.parse.urlencode(params)
 
 
