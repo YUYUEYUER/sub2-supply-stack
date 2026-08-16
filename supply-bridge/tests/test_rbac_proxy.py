@@ -228,6 +228,11 @@ class RBACValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(HTTPFailure, "group_not_allowed"):
             validate_request(CONFIG, "PUT", "/api/v1/admin/groups/12", body)
 
+    def test_bugteam_group_detail_is_ownership_scoped(self):
+        self.assertIsNone(validate_request(CONFIG, "GET", "/api/v1/admin/groups/13", None))
+        with self.assertRaisesRegex(HTTPFailure, "group_not_allowed"):
+            validate_request(CONFIG, "GET", "/api/v1/admin/groups/12", None)
+
     def test_account_query_rejects_duplicate_and_oversized_parameters(self):
         with self.assertRaisesRegex(ValueError, "duplicate"):
             validate_query("GET", "/api/v1/admin/accounts", "group=11&group=13&lite=true", CONFIG)

@@ -207,6 +207,10 @@ class RBACHandler(BaseHTTPRequestHandler):
                 self._audit(200, path, source="virtual_ownership_group_update")
                 self._safe_json(200, virtual_group_response(self.server.config, clean_body))
                 return
+            if self.command == "GET" and GROUP_PATH.fullmatch(path):
+                self._audit(200, path, source="virtual_ownership_group_read")
+                self._safe_json(200, virtual_group_response(self.server.config, {}))
+                return
             if path == "/api/v1/admin/accounts/usage/batch" and isinstance(clean_body, dict):
                 for account_id in clean_body.get("account_ids", []):
                     self._require_owned_account(account_id)
@@ -352,6 +356,10 @@ def validate_request(config: ProxyConfig, method: str, path: str, body: Any) -> 
     if method == "GET" and USAGE_PATH.fullmatch(path):
         return None
     group_match = GROUP_PATH.fullmatch(path)
+    if method == "GET" and group_match:
+        if int(group_match.group(1)) != config.ownership_group_id:
+            raise HTTPFailure(403, "group_not_allowed")
+        return None
     if method == "PUT" and group_match:
         if int(group_match.group(1)) != config.ownership_group_id:
             raise HTTPFailure(403, "group_not_allowed")
