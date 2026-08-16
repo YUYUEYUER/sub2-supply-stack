@@ -40,7 +40,7 @@ jobs:
         with:
           context: ./supply-bridge
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/sub2-supply-bridge:1.0.19
+          tags: ghcr.io/yuyueyuer/sub2-supply-bridge:1.0.19
           cache-from: type=gha,scope=sub2-supply-bridge
           cache-to: type=gha,mode=max,scope=sub2-supply-bridge
 
@@ -69,6 +69,6 @@ jobs:
           build-args: |
             VERSION=0.1.177-http-ws.1
             COMMIT=${{ github.sha }}
-          tags: ghcr.io/${{ github.repository_owner }}/sub2api-custom:0.1.177-http-ws.1
+          tags: ghcr.io/yuyueyuer/sub2api-custom:0.1.177-http-ws.1
           cache-from: type=gha,scope=sub2api-custom
           cache-to: type=gha,mode=max,scope=sub2api-custom
